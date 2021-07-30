@@ -1,9 +1,6 @@
-
 from django.contrib.auth.models import User
-from rest_framework import generics, status
-from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.views import APIView
-from rest_framework.response import Response
+from rest_framework import generics
+from rest_framework.permissions import AllowAny
 
 from .serializers import RegisterSerializer
 
@@ -20,17 +17,3 @@ class AccountView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_object(self):
         return self.request.user
-
-
-
-
-
-
-class HelloView(APIView):
-    permission_classes = (IsAuthenticated,)
-
-    def get(self, request):
-        content = {'message': 'Hello, GeeksforGeeks'}
-        user = request.user
-        print(user.email)
-        return Response(content)

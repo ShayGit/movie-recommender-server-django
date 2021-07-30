@@ -1,45 +1,41 @@
-from django.db.models import Avg
-from rest_framework import status
 from rest_framework.generics import ListAPIView
 from rest_framework.response import Response
-from rest_framework.request import Request
-from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from .models import Movie
-from ratings.models import Rating
 from .serializers import MovieSerializer
 from .MovieRecommender import *
 from .SearchPagination import SearchPagination
+from auth.serializers import UserRatingSerializer
+
 
 class MovieListView(ListAPIView):
     pagination_class = SearchPagination
-    def get_queryset(self):
-        movie_title = self.request.query_params.get('title')
-        movie_title = movie_title if movie_title else ""
-        movies_user_rated = Rating.objects.filter(user = self.request.user).values_list('movie', flat=True)
-        print(movie_title)
-        queryset = Movie.objects.filter(title__icontains=movie_title).exclude(id__in=movies_user_rated)
-
-        return queryset
-
     serializer_class = MovieSerializer
+
+    def get_queryset(self):
+        movie_title = self.request.query_params.get('title', "")
+        user_ratings_serializer = UserRatingSerializer(self.request.user)
+        movies_user_rated_ids = [movie['id'] for movie in user_ratings_serializer.data['my_movies']]
+        queryset = Movie.objects.filter(title__icontains=movie_title).exclude(id__in=movies_user_rated_ids)
+        return queryset
 
 
 class MovieRecommendView(APIView):
 
     def get(self, request, format=None):
-        movies_user_rated = list(Movie.objects.filter(id__in=Rating.objects.filter(user=self.request.user).values_list('movie')))
+        user_ratings_serializer = UserRatingSerializer(self.request.user)
+        movies_user_rated = user_ratings_serializer.data['my_movies']
+        user_ratings_objects = user_ratings_serializer.data['my_ratings']
         if movies_user_rated:
-            avg_rating = Rating.objects.aggregate(average_rating=Avg('rating'))['average_rating']
-            movies_user_liked = list(Movie.objects.filter(id__in=Rating.objects.filter(rating__gte=avg_rating).values_list('movie')))
-
-            movie_recommendation_titles = get_recommendation(rated_movies = movies_user_rated, liked_movies=movies_user_liked)
-            movies = Movie.objects.filter(title__in=movie_recommendation_titles)
-            movie_serializer = MovieSerializer(movies,many=True)
+            user_ratings = [rating['rating'] for rating in user_ratings_objects]
+            avg_rating = sum(user_ratings) / len(user_ratings)
+            movies_titles_user_liked = [rating['movie']['title'] for rating in user_ratings_objects if
+                                        rating['rating'] >= avg_rating]
+            movies_titles_user_rated = [movie['title'] for movie in movies_user_rated]
+            movie_recommendation_titles = get_recommendation(rated_movies=movies_titles_user_rated,
+                                                             liked_movies=movies_titles_user_liked)
+            movies = Movie.objects.filter(title__in=movie_recommendation_titles).order_by('title')
+            movie_serializer = MovieSerializer(movies, many=True)
             return Response(movie_serializer.data)
-        else:
-            return Response([])
 
-
-
-
+        return Response([])

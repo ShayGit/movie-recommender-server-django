@@ -1,14 +1,12 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from rest_framework.validators import UniqueValidator
 from django.contrib.auth.password_validation import validate_password
+from ratings.serializers import RatingSerializer
 
 
 class RegisterSerializer(serializers.ModelSerializer):
-
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True, required=True)
-    # movies = serializers.PrimaryKeyRelatedField(many=True, read_only=True,queryset=)
 
     class Meta:
         model = User
@@ -23,9 +21,8 @@ class RegisterSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         user = User.objects.create(
             username=validated_data['username'],
-            first_name=validated_data['first_name'],
-            last_name=validated_data['last_name'],
-            # email=validated_data['email']
+            first_name="" if 'first_name' not in validated_data else validated_data['first_name'],
+            last_name="" if 'last_name' not in validated_data else validated_data['last_name'],
         )
 
         user.set_password(validated_data['password'])
@@ -39,9 +36,15 @@ class RegisterSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
-# class AccountSerializer(serializers.ModelSerializer):
-#
-#     class Meta:
-#         model = User
-#         fields = ('pk','username', 'email')
 
+class UserRatingSerializer(serializers.ModelSerializer):
+    my_ratings = RatingSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = User
+        fields = ('my_ratings',)
+
+    def to_representation(self, user):
+        data = super().to_representation(user)
+        data['my_movies'] = [rating['movie'] for rating in data['my_ratings']]
+        return data
